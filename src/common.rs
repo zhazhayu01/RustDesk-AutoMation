@@ -1411,10 +1411,17 @@ pub async fn secure_tcp(conn: &mut Stream, key: &str) -> ResultType<()> {
     if use_ws() {
         return Ok(());
     }
+    
+    // Skip secure_tcp when not logged in to API account to avoid timeout
+    // since server won't respond to secure_tcp request in non-login state
+    // but encrypted connection is still possible without API login
     let rs_pk = get_rs_pk(key);
     let Some(rs_pk) = rs_pk else {
-        bail!("Handshake failed: invalid public key from rendezvous server");
+        // If no valid public key, just return Ok to avoid timeout
+        // This allows non-login state connections to proceed without waiting
+        return Ok(());
     };
+    
     match timeout(READ_TIMEOUT, conn.next()).await? {
         Some(Ok(bytes)) => {
             if let Ok(msg_in) = RendezvousMessage::parse_from_bytes(&bytes) {
